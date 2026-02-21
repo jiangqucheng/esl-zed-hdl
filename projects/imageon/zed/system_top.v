@@ -1,36 +1,10 @@
 // ***************************************************************************
-// ***************************************************************************
 // Copyright (C) 2015-2023 Analog Devices, Inc. All rights reserved.
 //
-// In this HDL repository, there are many different and unique modules, consisting
-// of various HDL (Verilog or VHDL) components. The individual modules are
-// developed independently, and may be accompanied by separate and unique license
-// terms.
-//
-// The user should read each of these license terms, and understand the
-// freedoms and responsibilities that he or she has by using this source/core.
-//
-// This core is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-// A PARTICULAR PURPOSE.
-//
-// Redistribution and use of source or resulting binaries, with or without modification
-// of this file, are permitted under one of the following two license terms:
-//
-//   1. The GNU General Public License version 2 as published by the
-//      Free Software Foundation, which can be found in the top level directory
-//      of this repository (LICENSE_GPL2), and also online at:
-//      <https://www.gnu.org/licenses/old-licenses/gpl-2.0.html>
-//
-// OR
-//
-//   2. An ADI specific BSD license, which can be found in the top level directory
-//      of this repository (LICENSE_ADIBSD), and also on-line at:
-//      https://github.com/analogdevicesinc/hdl/blob/main/LICENSE_ADIBSD
-//      This will allow to generate bit files and not release the source code,
-//      as long as it attaches to an ADI device.
-//
-// ***************************************************************************
+// Zedboard standalone (no FMC-IMAGEON).
+// HDMI TX via onboard ADV7511 (16-bit parallel from zed_system_bd).
+// HDMI RX / SPDIF RX / iic_imageon removed.
+// EECE4534 board peripherals added.
 // ***************************************************************************
 
 `timescale 1ns/100ps
@@ -60,33 +34,51 @@ module system_top (
   inout                   fixed_io_ps_porb,
   inout                   fixed_io_ps_srstb,
 
+  // GPIO (XADC-GIO + OTG-RESETN routed through gpio_bd[31:27];
+  //        lower bits not used by zed_system_bd directly)
   inout       [31:0]      gpio_bd,
 
+  // HDMI TX (ADV7511 onboard, 16-bit parallel)
+  output                  hdmi_out_clk,
+  output                  hdmi_vsync,
+  output                  hdmi_hsync,
+  output                  hdmi_data_e,
+  output      [15:0]      hdmi_data,
+
+  // SPDIF TX (onboard)
+  output                  spdif,
+
+  // I2S audio (onboard codec)
   output                  i2s_mclk,
   output                  i2s_bclk,
   output                  i2s_lrclk,
   output                  i2s_sdata_out,
   input                   i2s_sdata_in,
 
+  // IIC (onboard)
   inout                   iic_scl,
   inout                   iic_sda,
   inout       [ 1:0]      iic_mux_scl,
   inout       [ 1:0]      iic_mux_sda,
 
-  input                   hdmi_rx_clk,
-  input       [15:0]      hdmi_rx_data,
-  inout                   hdmi_rx_int,
-  input                   hdmi_rx_spdif,
+  // OTG
+  input                   otg_vbusoc,
 
-  output                  hdmi_tx_clk,
-  output      [15:0]      hdmi_tx_data,
-  output                  hdmi_tx_spdif,
-
-  inout                   hdmi_iic_scl,
-  inout                   hdmi_iic_sda,
-  inout                   hdmi_iic_rstn,
-
-  input                   otg_vbusoc
+  // EECE4534 board peripherals
+  output      [ 7:0]      board_leds,
+  input       [ 7:0]      board_sw,
+  input       [ 4:0]      board_btn,
+  output      [ 3:0]      oled_ctl,
+  output                  oled_sck,
+  output                  oled_data,
+  output      [ 1:0]      pwm_out,
+  input                   uart_rx,
+  output                  uart_tx,
+  inout                   iic_ext_scl,
+  inout                   iic_ext_sda,
+  inout       [15:0]      pmod_gpio_buf,
+  input                   tmr_capture,
+  output                  tmr_generate
 );
 
   // internal signals
@@ -100,107 +92,154 @@ module system_top (
   wire    [ 1:0]  iic_mux_sda_i_s;
   wire    [ 1:0]  iic_mux_sda_o_s;
   wire            iic_mux_sda_t_s;
+  wire            iic_ext_scl_i_s;
+  wire            iic_ext_scl_o_s;
+  wire            iic_ext_scl_t_s;
+  wire            iic_ext_sda_i_s;
+  wire            iic_ext_sda_o_s;
+  wire            iic_ext_sda_t_s;
+  wire    [15:0]  pmod_gpio_o_s;
+  wire    [15:0]  pmod_gpio_i_s;
+  wire    [15:0]  pmod_gpio_t_s;
 
-  assign gpio_i[63:34] = gpio_o[63:34];
+  assign gpio_i[63:32] = gpio_o[63:32];
 
   // instantiations
 
   ad_iobuf #(
-    .DATA_WIDTH(2)
-  ) i_gpio (
-    .dio_t (gpio_t[33:32]),
-    .dio_i (gpio_o[33:32]),
-    .dio_o (gpio_i[33:32]),
-    .dio_p ({hdmi_iic_rstn, hdmi_rx_int}));
-
-  ad_iobuf #(
     .DATA_WIDTH(32)
   ) i_iobuf (
-    .dio_t(gpio_t[31:0]),
-    .dio_i(gpio_o[31:0]),
-    .dio_o(gpio_i[31:0]),
-    .dio_p(gpio_bd));
+    .dio_t (gpio_t[31:0]),
+    .dio_i (gpio_o[31:0]),
+    .dio_o (gpio_i[31:0]),
+    .dio_p (gpio_bd));
 
   ad_iobuf #(
     .DATA_WIDTH(2)
   ) i_iic_mux_scl (
-    .dio_t({iic_mux_scl_t_s, iic_mux_scl_t_s}),
-    .dio_i(iic_mux_scl_o_s),
-    .dio_o(iic_mux_scl_i_s),
-    .dio_p(iic_mux_scl));
+    .dio_t ({iic_mux_scl_t_s, iic_mux_scl_t_s}),
+    .dio_i (iic_mux_scl_o_s),
+    .dio_o (iic_mux_scl_i_s),
+    .dio_p (iic_mux_scl));
 
   ad_iobuf #(
     .DATA_WIDTH(2)
   ) i_iic_mux_sda (
-    .dio_t({iic_mux_sda_t_s, iic_mux_sda_t_s}),
-    .dio_i(iic_mux_sda_o_s),
-    .dio_o(iic_mux_sda_i_s),
-    .dio_p(iic_mux_sda));
+    .dio_t ({iic_mux_sda_t_s, iic_mux_sda_t_s}),
+    .dio_i (iic_mux_sda_o_s),
+    .dio_o (iic_mux_sda_i_s),
+    .dio_p (iic_mux_sda));
+
+  ad_iobuf #(.DATA_WIDTH(1)) i_iic_ext_scl (
+    .dio_t (iic_ext_scl_t_s),
+    .dio_i (iic_ext_scl_o_s),
+    .dio_o (iic_ext_scl_i_s),
+    .dio_p (iic_ext_scl));
+
+  ad_iobuf #(.DATA_WIDTH(1)) i_iic_ext_sda (
+    .dio_t (iic_ext_sda_t_s),
+    .dio_i (iic_ext_sda_o_s),
+    .dio_o (iic_ext_sda_i_s),
+    .dio_p (iic_ext_sda));
+
+  ad_iobuf #(.DATA_WIDTH(16)) i_pmodbuf (
+    .dio_t (pmod_gpio_t_s),
+    .dio_i (pmod_gpio_o_s),
+    .dio_o (pmod_gpio_i_s),
+    .dio_p (pmod_gpio_buf));
 
   system_wrapper i_system_wrapper (
-    .ddr_addr (ddr_addr),
-    .ddr_ba (ddr_ba),
-    .ddr_cas_n (ddr_cas_n),
-    .ddr_ck_n (ddr_ck_n),
-    .ddr_ck_p (ddr_ck_p),
-    .ddr_cke (ddr_cke),
-    .ddr_cs_n (ddr_cs_n),
-    .ddr_dm (ddr_dm),
-    .ddr_dq (ddr_dq),
-    .ddr_dqs_n (ddr_dqs_n),
-    .ddr_dqs_p (ddr_dqs_p),
-    .ddr_odt (ddr_odt),
-    .ddr_ras_n (ddr_ras_n),
-    .ddr_reset_n (ddr_reset_n),
-    .ddr_we_n (ddr_we_n),
+    // DDR
+    .ddr_addr         (ddr_addr),
+    .ddr_ba           (ddr_ba),
+    .ddr_cas_n        (ddr_cas_n),
+    .ddr_ck_n         (ddr_ck_n),
+    .ddr_ck_p         (ddr_ck_p),
+    .ddr_cke          (ddr_cke),
+    .ddr_cs_n         (ddr_cs_n),
+    .ddr_dm           (ddr_dm),
+    .ddr_dq           (ddr_dq),
+    .ddr_dqs_n        (ddr_dqs_n),
+    .ddr_dqs_p        (ddr_dqs_p),
+    .ddr_odt          (ddr_odt),
+    .ddr_ras_n        (ddr_ras_n),
+    .ddr_reset_n      (ddr_reset_n),
+    .ddr_we_n         (ddr_we_n),
+    // Fixed IO
     .fixed_io_ddr_vrn (fixed_io_ddr_vrn),
     .fixed_io_ddr_vrp (fixed_io_ddr_vrp),
-    .fixed_io_mio (fixed_io_mio),
-    .fixed_io_ps_clk (fixed_io_ps_clk),
+    .fixed_io_mio     (fixed_io_mio),
+    .fixed_io_ps_clk  (fixed_io_ps_clk),
     .fixed_io_ps_porb (fixed_io_ps_porb),
-    .fixed_io_ps_srstb (fixed_io_ps_srstb),
-    .gpio_i (gpio_i),
-    .gpio_o (gpio_o),
-    .gpio_t (gpio_t),
-    .hdmi_rx_clk (hdmi_rx_clk),
-    .hdmi_rx_data (hdmi_rx_data),
-    .hdmi_tx_clk (hdmi_tx_clk),
-    .hdmi_tx_data (hdmi_tx_data),
-    .iic_imageon_scl_io (hdmi_iic_scl),
-    .iic_imageon_sda_io (hdmi_iic_sda),
-    .i2s_bclk (i2s_bclk),
-    .i2s_lrclk (i2s_lrclk),
-    .i2s_mclk (i2s_mclk),
-    .i2s_sdata_in (i2s_sdata_in),
-    .i2s_sdata_out (i2s_sdata_out),
-    .iic_fmc_scl_io (iic_scl),
-    .iic_fmc_sda_io (iic_sda),
-    .iic_mux_scl_i (iic_mux_scl_i_s),
-    .iic_mux_scl_o (iic_mux_scl_o_s),
-    .iic_mux_scl_t (iic_mux_scl_t_s),
-    .iic_mux_sda_i (iic_mux_sda_i_s),
-    .iic_mux_sda_o (iic_mux_sda_o_s),
-    .iic_mux_sda_t (iic_mux_sda_t_s),
-    .otg_vbusoc (otg_vbusoc),
-    .spdif_rx (hdmi_rx_spdif),
-    .spdif_tx (hdmi_tx_spdif),
-    .spi0_clk_i (1'b0),
-    .spi0_clk_o (),
-    .spi0_csn_0_o (),
-    .spi0_csn_1_o (),
-    .spi0_csn_2_o (),
-    .spi0_csn_i (1'b1),
-    .spi0_sdi_i (1'b0),
-    .spi0_sdo_i (1'b0),
-    .spi0_sdo_o (),
-    .spi1_clk_i (1'b0),
-    .spi1_clk_o (),
-    .spi1_csn_0_o (),
-    .spi1_csn_1_o (),
-    .spi1_csn_2_o (),
-    .spi1_csn_i (1'b1),
-    .spi1_sdi_i (1'b0),
-    .spi1_sdo_i (1'b0),
-    .spi1_sdo_o ());
+    .fixed_io_ps_srstb(fixed_io_ps_srstb),
+    // GPIO
+    .gpio_i           (gpio_i),
+    .gpio_o           (gpio_o),
+    .gpio_t           (gpio_t),
+    // HDMI TX (onboard ADV7511)
+    .hdmi_out_clk     (hdmi_out_clk),
+    .hdmi_vsync       (hdmi_vsync),
+    .hdmi_hsync       (hdmi_hsync),
+    .hdmi_data_e      (hdmi_data_e),
+    .hdmi_data        (hdmi_data),
+    // SPDIF TX
+    .spdif            (spdif),
+    // I2S
+    .i2s_bclk         (i2s_bclk),
+    .i2s_lrclk        (i2s_lrclk),
+    .i2s_mclk         (i2s_mclk),
+    .i2s_sdata_in     (i2s_sdata_in),
+    .i2s_sdata_out    (i2s_sdata_out),
+    // IIC onboard
+    .iic_fmc_scl_io   (iic_scl),
+    .iic_fmc_sda_io   (iic_sda),
+    .iic_mux_scl_i    (iic_mux_scl_i_s),
+    .iic_mux_scl_o    (iic_mux_scl_o_s),
+    .iic_mux_scl_t    (iic_mux_scl_t_s),
+    .iic_mux_sda_i    (iic_mux_sda_i_s),
+    .iic_mux_sda_o    (iic_mux_sda_o_s),
+    .iic_mux_sda_t    (iic_mux_sda_t_s),
+    // OTG
+    .otg_vbusoc       (otg_vbusoc),
+    // SPI (unused, tied off)
+    .spi0_clk_i       (1'b0),
+    .spi0_clk_o       (),
+    .spi0_csn_0_o     (),
+    .spi0_csn_1_o     (),
+    .spi0_csn_2_o     (),
+    .spi0_csn_i       (1'b1),
+    .spi0_sdi_i       (1'b0),
+    .spi0_sdo_i       (1'b0),
+    .spi0_sdo_o       (),
+    .spi1_clk_i       (1'b0),
+    .spi1_clk_o       (),
+    .spi1_csn_0_o     (),
+    .spi1_csn_1_o     (),
+    .spi1_csn_2_o     (),
+    .spi1_csn_i       (1'b1),
+    .spi1_sdi_i       (1'b0),
+    .spi1_sdo_i       (1'b0),
+    .spi1_sdo_o       (),
+    // EECE4534 peripherals
+    .board_leds       (board_leds),
+    .board_sw         (board_sw),
+    .board_btn        (board_btn),
+    .oled_ctl         (oled_ctl),
+    .oled_sck         (oled_sck),
+    .oled_data        (oled_data),
+    .pwm_out          (pwm_out),
+    .uart_rxd         (uart_rx),
+    .uart_txd         (uart_tx),
+    .iic_ext_scl_i    (iic_ext_scl_i_s),
+    .iic_ext_scl_o    (iic_ext_scl_o_s),
+    .iic_ext_scl_t    (iic_ext_scl_t_s),
+    .iic_ext_sda_i    (iic_ext_sda_i_s),
+    .iic_ext_sda_o    (iic_ext_sda_o_s),
+    .iic_ext_sda_t    (iic_ext_sda_t_s),
+    .pmod_gpio_o      (pmod_gpio_o_s),
+    .pmod_gpio_i      (pmod_gpio_i_s),
+    .pmod_gpio_t      (pmod_gpio_t_s),
+    .tmr_capture      (tmr_capture),
+    .tmr_generate     (tmr_generate));
 
 endmodule
