@@ -122,13 +122,13 @@ set_property  -dict {PACKAGE_PIN  AB10  IOSTANDARD LVCMOS33} [get_ports pmod_gpi
 set_property  -dict {PACKAGE_PIN  AB9   IOSTANDARD LVCMOS33} [get_ports pmod_gpio_buf[14]] ; ## JA9
 set_property  -dict {PACKAGE_PIN  AA8   IOSTANDARD LVCMOS33} [get_ports pmod_gpio_buf[15]] ; ## JA10
 
-# GPIO (gpio_bd - XADC-GIO and OTG-RESETN only; lower bits unused here)
+# GPIO (gpio_bd[4:0] maps to system gpio_bd[31:27]: XADC-GIO[3:0] + OTG-RESETN)
 
-set_property  -dict {PACKAGE_PIN  H15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[27]]   ; ## XADC-GIO0
-set_property  -dict {PACKAGE_PIN  R15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[28]]   ; ## XADC-GIO1
-set_property  -dict {PACKAGE_PIN  K15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[29]]   ; ## XADC-GIO2
-set_property  -dict {PACKAGE_PIN  J15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[30]]   ; ## XADC-GIO3
-set_property  -dict {PACKAGE_PIN  G17   IOSTANDARD LVCMOS25} [get_ports gpio_bd[31]]   ; ## OTG-RESETN
+set_property  -dict {PACKAGE_PIN  H15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[0]]   ; ## XADC-GIO0
+set_property  -dict {PACKAGE_PIN  R15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[1]]   ; ## XADC-GIO1
+set_property  -dict {PACKAGE_PIN  K15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[2]]   ; ## XADC-GIO2
+set_property  -dict {PACKAGE_PIN  J15   IOSTANDARD LVCMOS25} [get_ports gpio_bd[3]]   ; ## XADC-GIO3
+set_property  -dict {PACKAGE_PIN  G17   IOSTANDARD LVCMOS25} [get_ports gpio_bd[4]]   ; ## OTG-RESETN
 
 # PWM outputs
 
@@ -144,3 +144,8 @@ set_property  -dict {PACKAGE_PIN  AA4   IOSTANDARD LVCMOS33} [get_ports tmr_gene
 
 set_property  -dict {PACKAGE_PIN  T6    IOSTANDARD LVCMOS33} [get_ports uart_tx]
 set_property  -dict {PACKAGE_PIN  R6    IOSTANDARD LVCMOS33} [get_ports uart_rx]
+
+# Suppress IOB=TRUE placement warnings on oled_spi input registers
+# (OLED is write-only, no physical MISO pin)
+set_property IOB FALSE [get_cells {i_system_wrapper/system_i/oled_spi/U0/NO_DUAL_QUAD_MODE.QSPI_NORMAL/IO0_I_REG}]
+set_property IOB FALSE [get_cells {i_system_wrapper/system_i/oled_spi/U0/NO_DUAL_QUAD_MODE.QSPI_NORMAL/IO1_I_REG}]

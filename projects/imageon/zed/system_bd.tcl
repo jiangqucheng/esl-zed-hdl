@@ -81,6 +81,7 @@ create_bd_port -dir O oled_data
 create_bd_port -dir O oled_sck
 ad_connect oled_spi/io0_o  oled_data
 ad_connect oled_spi/sck_o  oled_sck
+ad_connect GND             oled_spi/io1_i
 ad_connect sys_ps7/FCLK_CLK0 oled_spi/ext_spi_clk
 
 # --- Timers ---
@@ -223,15 +224,3 @@ ad_ip_parameter xadc0 CONFIG.ENABLE_EXTERNAL_MUX false
 ad_ip_parameter xadc0 CONFIG.SEQUENCER_MODE Off
 ad_ip_parameter xadc0 CONFIG.EXTERNAL_MUX_CHANNEL VP_VN
 ad_connect xadc0/ip2intc_irpt sys_concat_intc/In8
-
-# --- I2S FIFO (axi_fifo_mm_s: RX path axi_i2s_adi -> CPU) ---
-ad_ip_instance axi_fifo_mm_s i2s_fifo
-ad_ip_parameter i2s_fifo CONFIG.C_USE_TX_DATA 0
-ad_ip_parameter i2s_fifo CONFIG.C_USE_TX_CTRL 0
-ad_cpu_interconnect 0x41660000 i2s_fifo
-
-ad_connect $sys_cpu_clk    i2s_fifo/s_axi_aclk
-ad_connect $sys_cpu_resetn i2s_fifo/s_axi_aresetn
-ad_connect $sys_cpu_clk    i2s_fifo/s_axis_aclk
-ad_connect $sys_cpu_resetn i2s_fifo/s_axis_aresetn
-ad_connect axi_i2s_adi/m_axis i2s_fifo/AXI_STR_RXD

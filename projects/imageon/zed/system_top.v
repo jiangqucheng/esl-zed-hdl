@@ -34,9 +34,8 @@ module system_top (
   inout                   fixed_io_ps_porb,
   inout                   fixed_io_ps_srstb,
 
-  // GPIO (XADC-GIO + OTG-RESETN routed through gpio_bd[31:27];
-  //        lower bits not used by zed_system_bd directly)
-  inout       [31:0]      gpio_bd,
+  // GPIO (only upper 5 bits used: XADC-GIO[3:0] + OTG-RESETN)
+  inout       [ 4:0]      gpio_bd,
 
   // HDMI TX (ADV7511 onboard, 16-bit parallel)
   output                  hdmi_out_clk,
@@ -103,15 +102,16 @@ module system_top (
   wire    [15:0]  pmod_gpio_t_s;
 
   assign gpio_i[63:32] = gpio_o[63:32];
+  assign gpio_i[26:0]  = gpio_o[26:0];  // unused lower bits looped back
 
   // instantiations
 
   ad_iobuf #(
-    .DATA_WIDTH(32)
+    .DATA_WIDTH(5)
   ) i_iobuf (
-    .dio_t (gpio_t[31:0]),
-    .dio_i (gpio_o[31:0]),
-    .dio_o (gpio_i[31:0]),
+    .dio_t (gpio_t[31:27]),
+    .dio_i (gpio_o[31:27]),
+    .dio_o (gpio_i[31:27]),
     .dio_p (gpio_bd));
 
   ad_iobuf #(
