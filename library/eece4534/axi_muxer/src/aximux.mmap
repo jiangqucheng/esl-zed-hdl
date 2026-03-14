@@ -1,0 +1,13 @@
+#register_size 32;
+#addr_mode byte;
+
+//registers
+register SOURCE description="Source select register";
+
+//fields
+field SOURCE.VALUE position=7..0 access=RW description="Source selector";
+
+//outputs
+output SRC_SEL source=SOURCE.VALUE;
+
+//no inputs!
