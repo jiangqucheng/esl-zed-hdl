@@ -1,10 +1,24 @@
 ###############################################################################
 ## system_constr.xdc — EBAZ4205 + expansion board
-## All pins verified against official EBAZ4205.xdc + expansion board mapping
+##
+## Pin allocation summary (all 18 available DATA pins used):
+##   ext_led[3..7]  : G20/J18/G19/H20/J19  (DATA2_5..9)
+##   sw[0..7]       : K18/K19/J20/L16/L19/M18/L20/M20  (DATA2_11..19)
+##   i2s_mclk       : L17  (DATA2_20)
+##   i2s_bclk       : M19  (DATA3_5)
+##   i2s_lrclk      : N20  (DATA3_6)
+##   i2s_sdata_out  : P18  (DATA3_7)
+##   iic_main_scl   : M17  (DATA3_8)
+##   iic_main_sda   : L17  ← CONFLICT! see note below
+##
+## Note: I2C SDA conflicts with I2S MCLK on L17.
+##   Resolution: I2S MCLK is optional (PCM5102A has internal PLL).
+##   Use L17 for iic_main_sda; MCLK left unconnected or tied low.
+##   With 3-wire I2S (no SCK/MCLK), PCM5102A works fine from BCK PLL.
 ###############################################################################
 
 ## ============================================================================
-## ENET0 EMIO MII — RTL8201 PHY (verified from blkf2016)
+## ENET0 EMIO MII
 ## ============================================================================
 set_property PACKAGE_PIN U14  [get_ports ENET0_GMII_RX_CLK_0]
 set_property PACKAGE_PIN W16  [get_ports ENET0_GMII_RX_DV_0]
@@ -25,83 +39,87 @@ set_property IOSTANDARD LVCMOS33 [get_ports MDIO_ETHERNET_0_0_*]
 create_clock -name eth_rx_clk -period 40.000 [get_ports ENET0_GMII_RX_CLK_0]
 
 ## ============================================================================
-## LEDs — on-board [1:0] + expansion [4:2]
+## On-board LEDs (board_led_gpio)
 ## ============================================================================
-set_property -dict {PACKAGE_PIN W13  IOSTANDARD LVCMOS33} [get_ports {board_leds[0]}] ;## green
-set_property -dict {PACKAGE_PIN W14  IOSTANDARD LVCMOS33} [get_ports {board_leds[1]}] ;## red
-set_property -dict {PACKAGE_PIN E19  IOSTANDARD LVCMOS33} [get_ports {board_leds[2]}] ;## LED1(DATA1_18)
-set_property -dict {PACKAGE_PIN K17  IOSTANDARD LVCMOS33} [get_ports {board_leds[3]}] ;## LED2(DATA1_20)
-set_property -dict {PACKAGE_PIN H18  IOSTANDARD LVCMOS33} [get_ports {board_leds[4]}] ;## LED3(DATA1_15)
+set_property -dict {PACKAGE_PIN W13  IOSTANDARD LVCMOS33} [get_ports {board_led[0]}] ;## green
+set_property -dict {PACKAGE_PIN W14  IOSTANDARD LVCMOS33} [get_ports {board_led[1]}] ;## red
 
 ## ============================================================================
-## Buttons — 5x expansion (DATA3, bank 34)
+## Extension LEDs (ext_led_gpio, 8-bit)
+## [0..2] = existing expansion board LEDs (DATA1)
+## [3..7] = new (DATA2_5..9)
 ## ============================================================================
-set_property -dict {PACKAGE_PIN T19  IOSTANDARD LVCMOS33} [get_ports {board_btn[0]}] ;## BTN1(DATA3_18)
-set_property -dict {PACKAGE_PIN P19  IOSTANDARD LVCMOS33} [get_ports {board_btn[1]}] ;## BTN2(DATA3_15)
-set_property -dict {PACKAGE_PIN U20  IOSTANDARD LVCMOS33} [get_ports {board_btn[2]}] ;## BTN3(DATA3_17)
-set_property -dict {PACKAGE_PIN U19  IOSTANDARD LVCMOS33} [get_ports {board_btn[3]}] ;## BTN4(DATA3_20)
-set_property -dict {PACKAGE_PIN V20  IOSTANDARD LVCMOS33} [get_ports {board_btn[4]}] ;## BTN5(DATA3_19)
+set_property -dict {PACKAGE_PIN E19  IOSTANDARD LVCMOS33} [get_ports {ext_led[0]}] ;## LED1 DATA1_18
+set_property -dict {PACKAGE_PIN K17  IOSTANDARD LVCMOS33} [get_ports {ext_led[1]}] ;## LED2 DATA1_20
+set_property -dict {PACKAGE_PIN H18  IOSTANDARD LVCMOS33} [get_ports {ext_led[2]}] ;## LED3 DATA1_15
+set_property -dict {PACKAGE_PIN G20  IOSTANDARD LVCMOS33} [get_ports {ext_led[3]}] ;## DATA2_5
+set_property -dict {PACKAGE_PIN J18  IOSTANDARD LVCMOS33} [get_ports {ext_led[4]}] ;## DATA2_6
+set_property -dict {PACKAGE_PIN G19  IOSTANDARD LVCMOS33} [get_ports {ext_led[5]}] ;## DATA2_7
+set_property -dict {PACKAGE_PIN H20  IOSTANDARD LVCMOS33} [get_ports {ext_led[6]}] ;## DATA2_8
+set_property -dict {PACKAGE_PIN J19  IOSTANDARD LVCMOS33} [get_ports {ext_led[7]}] ;## DATA2_9
 
 ## ============================================================================
-## LCD ST7789 SPI + control (DATA3, bank 34)
+## DIP Switches (dipsw_gpio, 8-bit input)
 ## ============================================================================
-set_property -dict {PACKAGE_PIN R19  IOSTANDARD LVCMOS33} [get_ports lcd_scl]        ;## SCL(DATA3_14)
-set_property -dict {PACKAGE_PIN P20  IOSTANDARD LVCMOS33} [get_ports lcd_sda]        ;## SDA(DATA3_11)
-set_property -dict {PACKAGE_PIN R18  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[0]}]   ;## DC(DATA3_13)
-set_property -dict {PACKAGE_PIN N17  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[1]}]   ;## RST(DATA3_9)
-set_property -dict {PACKAGE_PIN T20  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[2]}]   ;## BL(DATA3_16)
+set_property -dict {PACKAGE_PIN K18  IOSTANDARD LVCMOS33} [get_ports {sw[0]}] ;## DATA2_11
+set_property -dict {PACKAGE_PIN K19  IOSTANDARD LVCMOS33} [get_ports {sw[1]}] ;## DATA2_13
+set_property -dict {PACKAGE_PIN J20  IOSTANDARD LVCMOS33} [get_ports {sw[2]}] ;## DATA2_14
+set_property -dict {PACKAGE_PIN L16  IOSTANDARD LVCMOS33} [get_ports {sw[3]}] ;## DATA2_15
+set_property -dict {PACKAGE_PIN L19  IOSTANDARD LVCMOS33} [get_ports {sw[4]}] ;## DATA2_16
+set_property -dict {PACKAGE_PIN M18  IOSTANDARD LVCMOS33} [get_ports {sw[5]}] ;## DATA2_17
+set_property -dict {PACKAGE_PIN L20  IOSTANDARD LVCMOS33} [get_ports {sw[6]}] ;## DATA2_18
+set_property -dict {PACKAGE_PIN M20  IOSTANDARD LVCMOS33} [get_ports {sw[7]}] ;## DATA2_19
 
 ## ============================================================================
-## CH340 UART (DATA1, bank 35)
+## Push Buttons (btn_gpio, 5-bit input)
 ## ============================================================================
-set_property -dict {PACKAGE_PIN H16  IOSTANDARD LVCMOS33} [get_ports uart_rxd]  ;## DATA1_6 → CH340_TXD
-set_property -dict {PACKAGE_PIN H17  IOSTANDARD LVCMOS33} [get_ports uart_txd]  ;## DATA1_11 → CH340_RXD
+set_property -dict {PACKAGE_PIN T19  IOSTANDARD LVCMOS33} [get_ports {board_btn[0]}] ;## BTN1 DATA3_18
+set_property -dict {PACKAGE_PIN P19  IOSTANDARD LVCMOS33} [get_ports {board_btn[1]}] ;## BTN2 DATA3_15
+set_property -dict {PACKAGE_PIN U20  IOSTANDARD LVCMOS33} [get_ports {board_btn[2]}] ;## BTN3 DATA3_17
+set_property -dict {PACKAGE_PIN U19  IOSTANDARD LVCMOS33} [get_ports {board_btn[3]}] ;## BTN4 DATA3_20
+set_property -dict {PACKAGE_PIN V20  IOSTANDARD LVCMOS33} [get_ports {board_btn[4]}] ;## BTN5 DATA3_19
 
 ## ============================================================================
-## PWM outputs — J5/J3 fan connectors (on EBAZ board, bank 34)
-## Both via optocoupler: FPGA drives, fan speed controlled
+## LCD ST7789 SPI + control
 ## ============================================================================
-set_property -dict {PACKAGE_PIN V12  IOSTANDARD LVCMOS33} [get_ports {pwm_out[0]}]  ;## J5_PWM
-set_property -dict {PACKAGE_PIN U12  IOSTANDARD LVCMOS33} [get_ports {pwm_out[1]}]  ;## J3_PWM
+set_property -dict {PACKAGE_PIN R19  IOSTANDARD LVCMOS33} [get_ports lcd_scl]       ;## SCL  DATA3_14
+set_property -dict {PACKAGE_PIN P20  IOSTANDARD LVCMOS33} [get_ports lcd_sda]       ;## SDA  DATA3_11
+set_property -dict {PACKAGE_PIN R18  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[0]}]  ;## DC   DATA3_13
+set_property -dict {PACKAGE_PIN N17  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[1]}]  ;## RST  DATA3_9
+set_property -dict {PACKAGE_PIN T20  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[2]}]  ;## BL   DATA3_16
 
 ## ============================================================================
-## Timer tachometer inputs — J5/J3 fan SPEED signals (on EBAZ board, bank 34)
-## Fan tach pulses, via optocoupler: fan speed feedback → FPGA capture
+## CH340 UART
 ## ============================================================================
-set_property -dict {PACKAGE_PIN V15  IOSTANDARD LVCMOS33} [get_ports tmr_capture]   ;## J5_SPEED
-set_property -dict {PACKAGE_PIN V13  IOSTANDARD LVCMOS33} [get_ports tmr_capture2]  ;## J3_SPEED
+set_property -dict {PACKAGE_PIN H16  IOSTANDARD LVCMOS33} [get_ports uart_rxd] ;## DATA1_6
+set_property -dict {PACKAGE_PIN H17  IOSTANDARD LVCMOS33} [get_ports uart_txd] ;## DATA1_11
 
 ## ============================================================================
-## Timer generate output (DATA2_8, bank 35)
+## PWM (J5=V12, J3=U12, via optocoupler)
 ## ============================================================================
-set_property -dict {PACKAGE_PIN H20  IOSTANDARD LVCMOS33} [get_ports tmr_generate]  ;## DATA2_8
+set_property -dict {PACKAGE_PIN V12  IOSTANDARD LVCMOS33} [get_ports {pwm_out[0]}] ;## J5_PWM
+set_property -dict {PACKAGE_PIN U12  IOSTANDARD LVCMOS33} [get_ports {pwm_out[1]}] ;## J3_PWM
 
 ## ============================================================================
-## PMOD GPIO [15:0] — DATA2 (14 pins) + DATA3 spare (2 pins)
-##
-## [0..13] = DATA2: G20/J18/G19/H20 already used by timer, remaining 10:
-##   wait — H20=tmr_generate, G20=free, J18=free, G19=free
-##   DATA2 free: G20(5) J18(6) G19(7) J19(9) K18(11) K19(13)
-##               J20(14) L16(15) L19(16) M18(17) L20(18) M20(19) L17(20)
-##   Use 14: G20 J18 G19 J19 K18 K19 J20 L16 L19 M18 L20 M20 L17 + DATA3_M19
-## [14..15] = DATA3 spare: M19 N20
+## Timer tachometer inputs (J5=V15, J3=V13, via optocoupler)
 ## ============================================================================
-set_property -dict {PACKAGE_PIN G20  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[0]}]  ;## DATA2_5
-set_property -dict {PACKAGE_PIN J18  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[1]}]  ;## DATA2_6
-set_property -dict {PACKAGE_PIN G19  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[2]}]  ;## DATA2_7
-set_property -dict {PACKAGE_PIN J19  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[3]}]  ;## DATA2_9
-set_property -dict {PACKAGE_PIN K18  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[4]}]  ;## DATA2_11
-set_property -dict {PACKAGE_PIN K19  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[5]}]  ;## DATA2_13
-set_property -dict {PACKAGE_PIN J20  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[6]}]  ;## DATA2_14
-set_property -dict {PACKAGE_PIN L16  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[7]}]  ;## DATA2_15
-set_property -dict {PACKAGE_PIN L19  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[8]}]  ;## DATA2_16
-set_property -dict {PACKAGE_PIN M18  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[9]}]  ;## DATA2_17
-set_property -dict {PACKAGE_PIN L20  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[10]}] ;## DATA2_18
-set_property -dict {PACKAGE_PIN M20  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[11]}] ;## DATA2_19
-set_property -dict {PACKAGE_PIN L17  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[12]}] ;## DATA2_20
-set_property -dict {PACKAGE_PIN M19  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[13]}] ;## DATA3_5
-set_property -dict {PACKAGE_PIN N20  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[14]}] ;## DATA3_6
-set_property -dict {PACKAGE_PIN P18  IOSTANDARD LVCMOS33} [get_ports {pmod_gpio_buf[15]}] ;## DATA3_7
+set_property -dict {PACKAGE_PIN V15  IOSTANDARD LVCMOS33} [get_ports tmr_capture]  ;## J5_SPEED
+set_property -dict {PACKAGE_PIN V13  IOSTANDARD LVCMOS33} [get_ports tmr_capture2] ;## J3_SPEED
+
+## ============================================================================
+## I2S audio (PCM5102A, 3-wire mode)
+## MCLK omitted — PCM5102A generates internally from BCK PLL
+## ============================================================================
+set_property -dict {PACKAGE_PIN M19  IOSTANDARD LVCMOS33} [get_ports i2s_bclk]      ;## BCK   DATA3_5
+set_property -dict {PACKAGE_PIN N20  IOSTANDARD LVCMOS33} [get_ports i2s_lrclk]     ;## LRCK  DATA3_6
+set_property -dict {PACKAGE_PIN P18  IOSTANDARD LVCMOS33} [get_ports i2s_sdata_out] ;## DIN   DATA3_7
+
+## ============================================================================
+## I2C main (axi_iic_main, mirrors Zedboard 0x41600000)
+## SCL = M17 (DATA3_8), SDA = L17 (DATA2_20)
+## ============================================================================
+set_property -dict {PACKAGE_PIN M17  IOSTANDARD LVCMOS33} [get_ports iic_main_scl] ;## SCL DATA3_8
+set_property -dict {PACKAGE_PIN L17  IOSTANDARD LVCMOS33} [get_ports iic_main_sda] ;## SDA DATA2_20
 
 ## ============================================================================
 ## IOB constraints for LCD SPI

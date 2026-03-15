@@ -1,29 +1,45 @@
 ###############################################################################
-## Copyright (C) 2015-2023 Analog Devices, Inc. All rights reserved.
-### SPDX short identifier: ADIBSD
-##
 ## imageon/ebaz4205/system_bd.tcl
 ##
-## Board resources:
-##   On-board:  LED×2 (W13/W14), UART1 console (MIO24/25), ETH (EMIO)
-##   Expansion: LED×3, Button×5, CH340 UART, LCD SPI, Buzzer, Timers, PMOD
-##
 ## Peripheral map (mirrors imageon/zed/system_bd.tcl where possible):
-##   0x411F0000  pmod_gpio    (16-bit bidir)
-##   0x41200000  led_gpio     (gpio1=5-bit LED out, gpio2=5-bit lcd_ctl out)
-##   0x41210000  dipsw_gpio   (8-bit in, no physical pins — reads 0)
-##   0x41220000  btn_gpio     (5-bit in, expansion buttons)
-##   0x41230000  lcd_spi      (SPI to LCD ST7789, replaces oled_spi)
-##   0x41240000  tmr0         (dual timer + PWM0)
-##   0x41250000  tmr1         (dual timer + PWM1)
-##   0x41260000  mux0         (1-bit 2-input mux, ties tmr0/led to tmr3 capture)
-##   0x41270000  mux1         (1-bit 2-input mux)
-##   0x41280000  tmr2         (capture timer)
-##   0x41290000  tmr3         (capture timer)
-##   0x412A0000  pluart0      (UART Lite → CH340, 115200 baud)
-##   0x41640000  axi_iic_ext  (spare I2C, no physical pins)
-##   0x41650000  xadc0        (on-chip temperature/voltage)
+##   0x41200000  board_led_gpio  (2-bit: W13 green, W14 red — separate IP)
+##   0x41208000  ext_led_gpio    (8-bit: E19/K17/H18/G20/J18/G19/H20/J19)
+##   0x41210000  dipsw_gpio      (8-bit in, 8x SW on expansion board)
+##   0x41220000  btn_gpio        (5-bit in, expansion buttons)
+##   0x41230000  lcd_spi         (SPI to LCD ST7789)
+##   0x41240000  tmr0            (dual timer + PWM0)
+##   0x41250000  tmr1            (dual timer + PWM1)
+##   0x41260000  mux0            (1-bit 2-input mux)
+##   0x41270000  mux1            (1-bit 2-input mux)
+##   0x41280000  tmr2            (capture timer — J5_SPEED V15)
+##   0x41290000  tmr3            (capture timer — J3_SPEED V13)
+##   0x412A0000  pluart0         (UART Lite → CH340, 115200 baud)
+##   0x41600000  axi_iic_main    (I2C master, SCL=P18 SDA=M17)
+##   0x41640000  axi_iic_ext     (spare I2C, physical pins)
+##   0x41650000  xadc0           (on-chip temperature/voltage)
 ##   0x45000000  axi_sysid_0
+##   0x75c00000  axi_spdif_tx_core
+##   0x77600000  axi_i2s_adi
+##
+## I2S pin map (PCM5102A, 3-wire mode — no SCK needed):
+##   BCK   = M19 (DATA3_5)
+##   LRCK  = N20 (DATA3_6)
+##   DIN   = P18 (DATA3_7)  [FPGA SDATA_OUT → DAC DIN]
+##   MCLK  = L17 (DATA2_20) [optional, chip has internal PLL]
+##
+## I2C pin map (axi_iic_main):
+##   SCL = M17 (DATA3_8)
+##   SDA = (DATA3 last spare, see note below)
+##
+## SW pin map (dipsw_gpio, 8 inputs):
+##   sw[0..7] = K18/K19/J20/L16/L19/M18/L20/M20 (DATA2_11..19)
+##
+## EXT LED pin map (ext_led_gpio, 8 outputs):
+##   ext_led[0..2] = E19/K17/H18 (DATA1_18/20/15, existing)
+##   ext_led[3..7] = G20/J18/G19/H20/J19 (DATA2_5..9, new)
+##
+## Note: I2C uses PS7 I2C0 (MIO 26/27) = /dev/i2c-0 instead of axi_iic_main
+##   to save 2 pins. axi_iic_ext reuses old axi_iic_main address for compat.
 ###############################################################################
 
 source $ad_hdl_dir/projects/common/ebaz4205/ebaz4205_system_bd.tcl
@@ -36,40 +52,54 @@ ad_ip_parameter rom_sys_0   CONFIG.ROM_ADDR_BITS 9
 sysid_gen_sys_init_file
 
 ###############################################################################
-## Disconnect interrupt slots we need (all currently GND)
-## Slots used: In0=dipsw, In1=btn, In3=lcd_spi, In4=tmr2, In5=tmr3,
-##             In6=pmod, In7=pluart0, In8=xadc, In13=iic_ext
+## Disconnect interrupt slots
+## Slots: In0=dipsw, In1=btn, In3=lcd_spi, In4=tmr2, In5=tmr3,
+##        In6=ext_led, In7=pluart0, In8=xadc, In13=iic_ext, In14=iic_main
+##        DMA: In15=spdif, In12=i2s_tx, (board_led has no irq)
 ###############################################################################
 
-foreach intc_in {In0 In1 In3 In4 In5 In6 In7 In8 In13} {
+foreach intc_in {In0 In1 In3 In4 In5 In6 In7 In8 In13 In14} {
   disconnect_bd_net \
     [get_bd_nets -of_objects [get_bd_pins sys_concat_intc/$intc_in]] \
     [get_bd_pins sys_concat_intc/$intc_in]
 }
 
 ###############################################################################
-## LED GPIO
-## gpio1 [4:0]: 5 LEDs — [0]=board green(W13), [1]=board red(W14),
-##                         [2]=ext LED1(E19), [3]=ext LED2(K17), [4]=ext LED3(H18)
-## gpio2 [4:0]: 5 LCD control signals — DC, RST, BL, (CS tied GND, SDA via SPI)
+## Board LED GPIO — 2-bit (W13 green, W14 red), separate IP for independent
+## software control. No interrupt needed.
 ###############################################################################
 
-ad_ip_instance axi_gpio led_gpio
-ad_ip_parameter led_gpio CONFIG.C_ALL_OUTPUTS   1
-ad_ip_parameter led_gpio CONFIG.C_GPIO_WIDTH    5
-ad_ip_parameter led_gpio CONFIG.C_IS_DUAL       1
-ad_ip_parameter led_gpio CONFIG.C_ALL_OUTPUTS_2 1
-ad_ip_parameter led_gpio CONFIG.C_GPIO2_WIDTH   5
-ad_cpu_interconnect 0x41200000 led_gpio
+ad_ip_instance axi_gpio board_led_gpio
+ad_ip_parameter board_led_gpio CONFIG.C_ALL_OUTPUTS 1
+ad_ip_parameter board_led_gpio CONFIG.C_GPIO_WIDTH  2
+ad_cpu_interconnect 0x41200000 board_led_gpio
 
-create_bd_port -dir O -from 4 -to 0 board_leds
+create_bd_port -dir O -from 1 -to 0 board_led
+ad_connect board_led board_led_gpio/gpio_io_o
+
+###############################################################################
+## Extension LED GPIO — 8-bit output
+## [0..2] = E19/K17/H18 (existing ext LEDs on expansion board)
+## [3..7] = G20/J18/G19/H20/J19 (DATA2_5..9, newly added)
+###############################################################################
+
+ad_ip_instance axi_gpio ext_led_gpio
+ad_ip_parameter ext_led_gpio CONFIG.C_ALL_OUTPUTS   1
+ad_ip_parameter ext_led_gpio CONFIG.C_INTERRUPT_PRESENT 1
+ad_ip_parameter ext_led_gpio CONFIG.C_GPIO_WIDTH    8
+ad_ip_parameter ext_led_gpio CONFIG.C_IS_DUAL       1
+ad_ip_parameter ext_led_gpio CONFIG.C_ALL_OUTPUTS_2 1
+ad_ip_parameter ext_led_gpio CONFIG.C_GPIO2_WIDTH   5
+ad_cpu_interconnect 0x41208000 ext_led_gpio
+ad_connect sys_concat_intc/In6 ext_led_gpio/ip2intc_irpt
+
+create_bd_port -dir O -from 7 -to 0 ext_led
 create_bd_port -dir O -from 4 -to 0 lcd_ctl
-ad_connect board_leds led_gpio/gpio_io_o
-ad_connect lcd_ctl    led_gpio/gpio2_io_o
+ad_connect ext_led  ext_led_gpio/gpio_io_o
+ad_connect lcd_ctl  ext_led_gpio/gpio2_io_o
 
 ###############################################################################
-## DIP Switch GPIO (no physical switches on board — reads 0)
-## Kept for software compatibility with Zedboard image
+## DIP Switch GPIO — 8-bit input, physical SW pins on expansion board
 ###############################################################################
 
 ad_ip_instance axi_gpio dipsw_gpio
@@ -79,11 +109,8 @@ ad_ip_parameter dipsw_gpio CONFIG.C_GPIO_WIDTH        8
 ad_cpu_interconnect 0x41210000 dipsw_gpio
 ad_connect sys_concat_intc/In0 dipsw_gpio/ip2intc_irpt
 
-# No physical pins — tie input to constant 0
-ad_ip_instance xlconstant sw_tie_zero
-ad_ip_parameter sw_tie_zero CONFIG.CONST_VAL   {0}
-ad_ip_parameter sw_tie_zero CONFIG.CONST_WIDTH {8}
-ad_connect sw_tie_zero/dout dipsw_gpio/gpio_io_i
+create_bd_port -dir I -from 7 -to 0 sw
+ad_connect sw dipsw_gpio/gpio_io_i
 
 ###############################################################################
 ## Push Button GPIO — 5 buttons on expansion board
@@ -100,8 +127,7 @@ create_bd_port -dir I -from 4 -to 0 board_btn
 ad_connect board_btn btn_gpio/gpio_io_i
 
 ###############################################################################
-## LCD SPI (ST7789, 4-line SPI — same AXI Quad SPI IP as Zedboard OLED)
-## SCL → sck_o, SDA → io0_o (MOSI)
+## LCD SPI (ST7789)
 ###############################################################################
 
 ad_ip_instance axi_quad_spi lcd_spi
@@ -113,13 +139,13 @@ ad_connect sys_concat_intc/In3 lcd_spi/ip2intc_irpt
 
 create_bd_port -dir O lcd_sda
 create_bd_port -dir O lcd_scl
-ad_connect lcd_spi/io0_o          lcd_sda
-ad_connect lcd_spi/sck_o          lcd_scl
-ad_connect GND                    lcd_spi/io1_i
-ad_connect sys_ps7/FCLK_CLK0     lcd_spi/ext_spi_clk
+ad_connect lcd_spi/io0_o      lcd_sda
+ad_connect lcd_spi/sck_o      lcd_scl
+ad_connect GND                lcd_spi/io1_i
+ad_connect sys_ps7/FCLK_CLK0 lcd_spi/ext_spi_clk
 
 ###############################################################################
-## Timers (identical to Zedboard)
+## Timers
 ###############################################################################
 
 ad_ip_instance axi_timer tmr0
@@ -138,10 +164,8 @@ ad_connect sys_concat_intc/In4 tmr2/interrupt
 
 create_bd_port -dir I tmr_capture
 create_bd_port -dir I tmr_capture2
-create_bd_port -dir O tmr_generate
 ad_connect tmr_capture  tmr2/capturetrig0
 ad_connect tmr_capture  tmr2/capturetrig1
-ad_connect tmr_generate tmr2/generateout0
 
 ad_ip_instance axi_timer tmr3
 ad_ip_parameter tmr3 CONFIG.enable_timer2  1
@@ -150,7 +174,7 @@ ad_cpu_interconnect 0x41290000 tmr3
 ad_connect sys_concat_intc/In5 tmr3/interrupt
 
 ###############################################################################
-## AXI Mux × 2 (identical to Zedboard)
+## AXI Mux × 2
 ###############################################################################
 
 ad_ip_instance axi_mux mux0
@@ -160,7 +184,7 @@ ad_cpu_interconnect 0x41260000 mux0
 ad_connect tmr0/pwm0         mux0/input_1
 ad_connect tmr3/capturetrig0 mux0/dout
 ad_connect tmr3/capturetrig1 mux0/dout
-ad_connect tmr_capture2 tmr3/capturetrig0
+ad_connect tmr_capture2      tmr3/capturetrig0
 
 ad_ip_instance axi_mux mux1
 ad_ip_parameter mux1 CONFIG.C_DATA_W  1
@@ -169,7 +193,7 @@ ad_cpu_interconnect 0x41270000 mux1
 ad_connect tmr1/pwm0 mux1/input_1
 
 ###############################################################################
-## UART Lite → CH340 on expansion board (115200 baud, upgraded from 19200)
+## UART Lite → CH340
 ###############################################################################
 
 ad_ip_instance axi_uartlite pluart0
@@ -183,13 +207,9 @@ ad_connect uart_rxd pluart0/rx
 ad_connect uart_txd pluart0/tx
 
 ###############################################################################
-## PWM output × 2
-## pwm_out[0] → tmr0/pwm0 (via mux0) → e.g. Buzzer
-## pwm_out[1] → tmr1/pwm0 (via mux1) → e.g. LCD backlight
+## PWM output × 2 (J5=V12, J3=U12 via optocoupler)
 ###############################################################################
 
-# pwm_out[0] -> J5_PWM (V12), pwm_out[1] -> J3_PWM (U12)
-# Both go through J3/J5 fan connectors (optocoupler protected)
 ad_ip_instance xlconcat pwmconcat
 ad_connect tmr0/pwm0 pwmconcat/In0
 ad_connect tmr1/pwm0 pwmconcat/In1
@@ -197,57 +217,66 @@ create_bd_port -dir O -from 1 -to 0 pwm_out
 ad_connect pwm_out pwmconcat/dout
 
 ###############################################################################
-## LED slice + mux routing (identical to Zedboard)
+## LED slice + mux routing for ext_led (8-bit) → board_leds mux logic
+## Uses ext_led[0] and ext_led[1] as inputs to mux0/mux1 (same as Zedboard
+## where led[0]/led[1] feed mux input_0)
 ###############################################################################
 
 ad_ip_instance xlslice ledslice0
-ad_ip_parameter ledslice0 CONFIG.DIN_WIDTH  5
+ad_ip_parameter ledslice0 CONFIG.DIN_WIDTH  8
 ad_ip_parameter ledslice0 CONFIG.DIN_FROM   0
 ad_ip_parameter ledslice0 CONFIG.DIN_TO     0
 
 ad_ip_instance xlslice ledslice1
-ad_ip_parameter ledslice1 CONFIG.DIN_WIDTH  5
+ad_ip_parameter ledslice1 CONFIG.DIN_WIDTH  8
 ad_ip_parameter ledslice1 CONFIG.DIN_FROM   1
 ad_ip_parameter ledslice1 CONFIG.DIN_TO     1
 
 ad_ip_instance xlslice ledslice2
-ad_ip_parameter ledslice2 CONFIG.DIN_WIDTH  5
-ad_ip_parameter ledslice2 CONFIG.DIN_FROM   4
+ad_ip_parameter ledslice2 CONFIG.DIN_WIDTH  8
+ad_ip_parameter ledslice2 CONFIG.DIN_FROM   7
 ad_ip_parameter ledslice2 CONFIG.DIN_TO     2
-ad_ip_parameter ledslice2 CONFIG.DOUT_WIDTH 3
+ad_ip_parameter ledslice2 CONFIG.DOUT_WIDTH 6
 
-ad_connect led_gpio/gpio_io_o ledslice0/Din
-ad_connect led_gpio/gpio_io_o ledslice1/Din
-ad_connect led_gpio/gpio_io_o ledslice2/Din
+ad_connect ext_led_gpio/gpio_io_o ledslice0/Din
+ad_connect ext_led_gpio/gpio_io_o ledslice1/Din
+ad_connect ext_led_gpio/gpio_io_o ledslice2/Din
 ad_connect ledslice0/Dout mux0/input_0
 ad_connect ledslice1/Dout mux1/input_0
 
 ad_ip_instance xlconcat ledconcat
 ad_ip_parameter ledconcat CONFIG.NUM_PORTS 3
-ad_connect mux0/dout       ledconcat/In0
-ad_connect mux1/dout       ledconcat/In1
-ad_connect ledslice2/Dout  ledconcat/In2
-ad_connect ledconcat/dout  board_leds
+ad_connect mux0/dout      ledconcat/In0
+ad_connect mux1/dout      ledconcat/In1
+ad_connect ledslice2/Dout ledconcat/In2
+ad_connect ledconcat/dout ext_led
 
 ###############################################################################
-## PMOD GPIO × 16 (expansion data port spare pins)
+## I2C main (axi_iic_main) — physical pins: SCL=M17(DATA3_8), SDA=L17(DATA2_20)
+## Mirrors Zedboard axi_iic_main at 0x41600000
 ###############################################################################
 
-ad_ip_instance axi_gpio pmod_gpio
-ad_ip_parameter pmod_gpio CONFIG.C_INTERRUPT_PRESENT 1
-ad_ip_parameter pmod_gpio CONFIG.C_GPIO_WIDTH        16
-ad_cpu_interconnect 0x411F0000 pmod_gpio
-ad_connect sys_concat_intc/In6 pmod_gpio/ip2intc_irpt
+ad_ip_instance axi_iic axi_iic_main
+ad_ip_parameter axi_iic_main CONFIG.USE_BOARD_FLOW true
+ad_ip_parameter axi_iic_main CONFIG.IIC_BOARD_INTERFACE Custom
+ad_cpu_interconnect 0x41600000 axi_iic_main
+ad_connect sys_concat_intc/In14 axi_iic_main/iic2intc_irpt
 
-create_bd_port -dir O -from 15 -to 0 pmod_gpio_o
-create_bd_port -dir I -from 15 -to 0 pmod_gpio_i
-create_bd_port -dir O -from 15 -to 0 pmod_gpio_t
-ad_connect pmod_gpio_o pmod_gpio/gpio_io_o
-ad_connect pmod_gpio_i pmod_gpio/gpio_io_i
-ad_connect pmod_gpio_t pmod_gpio/gpio_io_t
+create_bd_port -dir I iic_main_scl_i
+create_bd_port -dir O iic_main_scl_o
+create_bd_port -dir O iic_main_scl_t
+create_bd_port -dir I iic_main_sda_i
+create_bd_port -dir O iic_main_sda_o
+create_bd_port -dir O iic_main_sda_t
+ad_connect axi_iic_main/scl_i iic_main_scl_i
+ad_connect axi_iic_main/scl_o iic_main_scl_o
+ad_connect axi_iic_main/scl_t iic_main_scl_t
+ad_connect axi_iic_main/sda_i iic_main_sda_i
+ad_connect axi_iic_main/sda_o iic_main_sda_o
+ad_connect axi_iic_main/sda_t iic_main_sda_t
 
 ###############################################################################
-## External I2C (spare, no physical pins — ports exist for future use)
+## Spare I2C (axi_iic_ext) — physical pins on expansion header (no XDC yet)
 ###############################################################################
 
 ad_ip_instance axi_iic axi_iic_ext
@@ -268,7 +297,7 @@ ad_connect axi_iic_ext/sda_o iic_ext_sda_o
 ad_connect axi_iic_ext/sda_t iic_ext_sda_t
 
 ###############################################################################
-## XADC (on-chip, identical to Zedboard)
+## XADC
 ###############################################################################
 
 ad_ip_instance xadc_wiz xadc0
@@ -285,3 +314,54 @@ ad_ip_parameter xadc0 CONFIG.ENABLE_EXTERNAL_MUX      false
 ad_ip_parameter xadc0 CONFIG.SEQUENCER_MODE           Off
 ad_ip_parameter xadc0 CONFIG.EXTERNAL_MUX_CHANNEL     VP_VN
 ad_connect xadc0/ip2intc_irpt sys_concat_intc/In8
+
+###############################################################################
+## Audio: clock generator + SPDIF TX + I2S ADI
+## DMA0 → SPDIF, DMA1 → I2S TX, DMA2 → I2S RX
+## I2S pin map (3-wire, PCM5102A compatible):
+##   i2s_mclk  = L17 (DATA2_20) — optional, PCM5102A has internal PLL
+##   i2s_bclk  = M19 (DATA3_5)
+##   i2s_lrclk = N20 (DATA3_6)
+##   i2s_sdata_out = P18 (DATA3_7) → PCM5102A DIN
+##   i2s_sdata_in  = no physical pin (DAC only, tie to GND internally)
+###############################################################################
+
+ad_ip_instance clk_wiz sys_audio_clkgen
+ad_ip_parameter sys_audio_clkgen CONFIG.PRIMITIVE            MMCM
+ad_ip_parameter sys_audio_clkgen CONFIG.CLKOUT1_USED        true
+ad_ip_parameter sys_audio_clkgen CONFIG.CLKOUT1_REQUESTED_OUT_FREQ 12.288
+ad_ip_parameter sys_audio_clkgen CONFIG.USE_LOCKED          false
+ad_ip_parameter sys_audio_clkgen CONFIG.USE_RESET           false
+ad_connect sys_ps7/FCLK_CLK0 sys_audio_clkgen/clk_in1
+
+ad_ip_instance axi_spdif_tx axi_spdif_tx_core
+ad_ip_parameter axi_spdif_tx_core CONFIG.DMA_TYPE           1
+ad_ip_parameter axi_spdif_tx_core CONFIG.S_AXI_ADDRESS_WIDTH 16
+ad_cpu_interconnect 0x75c00000 axi_spdif_tx_core
+ad_connect sys_cpu_clk               axi_spdif_tx_core/DMA_REQ_ACLK
+ad_connect sys_cpu_resetn            axi_spdif_tx_core/DMA_REQ_RSTN
+ad_connect sys_audio_clkgen/clk_out1 axi_spdif_tx_core/spdif_data_clk
+ad_connect sys_ps7/DMA0_REQ          axi_spdif_tx_core/DMA_REQ
+ad_connect sys_ps7/DMA0_ACK          axi_spdif_tx_core/DMA_ACK
+
+create_bd_port -dir O spdif
+ad_connect spdif axi_spdif_tx_core/spdif_tx_o
+
+ad_ip_instance axi_i2s_adi axi_i2s_adi
+ad_ip_parameter axi_i2s_adi CONFIG.DMA_TYPE           1
+ad_ip_parameter axi_i2s_adi CONFIG.S_AXI_ADDRESS_WIDTH 16
+ad_cpu_interconnect 0x77600000 axi_i2s_adi
+ad_connect sys_cpu_clk               axi_i2s_adi/DMA_REQ_RX_ACLK
+ad_connect sys_cpu_clk               axi_i2s_adi/DMA_REQ_TX_ACLK
+ad_connect sys_cpu_resetn            axi_i2s_adi/DMA_REQ_TX_RSTN
+ad_connect sys_cpu_resetn            axi_i2s_adi/DMA_REQ_RX_RSTN
+ad_connect sys_audio_clkgen/clk_out1 axi_i2s_adi/DATA_CLK_I
+ad_connect sys_audio_clkgen/clk_out1 i2s_mclk
+ad_connect sys_ps7/DMA1_REQ          axi_i2s_adi/DMA_REQ_TX
+ad_connect sys_ps7/DMA1_ACK          axi_i2s_adi/DMA_ACK_TX
+ad_connect sys_ps7/DMA2_REQ          axi_i2s_adi/DMA_REQ_RX
+ad_connect sys_ps7/DMA2_ACK          axi_i2s_adi/DMA_ACK_RX
+
+create_bd_port -dir O -type clk i2s_mclk
+create_bd_intf_port -mode Master -vlnv analog.com:interface:i2s_rtl:1.0 i2s
+ad_connect i2s axi_i2s_adi/I2S
