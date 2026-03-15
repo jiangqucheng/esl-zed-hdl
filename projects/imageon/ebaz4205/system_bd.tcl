@@ -70,7 +70,7 @@ ad_connect gpio_i_tie/dout sys_ps7/GPIO_I
 ##        DMA: In15=spdif, In12=i2s_tx, (board_led has no irq)
 ###############################################################################
 
-foreach intc_in {In0 In1 In3 In4 In5 In6 In7 In8 In13 In14} {
+foreach intc_in {In0 In1 In3 In4 In5 In6 In7 In8 In9 In13 In14} {
   disconnect_bd_net \
     [get_bd_nets -of_objects [get_bd_pins sys_concat_intc/$intc_in]] \
     [get_bd_pins sys_concat_intc/$intc_in]
@@ -87,7 +87,12 @@ ad_ip_parameter board_led_gpio CONFIG.C_GPIO_WIDTH  2
 ad_cpu_interconnect 0x41208000 board_led_gpio
 
 create_bd_port -dir O -from 1 -to 0 board_led
-ad_connect board_led board_led_gpio/gpio_io_o
+## Invert board_led output — hardware is active-low (0=on, 1=off)
+ad_ip_instance util_vector_logic board_led_inv
+ad_ip_parameter board_led_inv CONFIG.C_SIZE      2
+ad_ip_parameter board_led_inv CONFIG.C_OPERATION not
+ad_connect board_led_gpio/gpio_io_o board_led_inv/Op1
+ad_connect board_led_inv/Res        board_led
 
 ###############################################################################
 ## Extension LED GPIO — 8-bit output
@@ -378,3 +383,57 @@ ad_connect sys_ps7/DMA1_REQ          axi_i2s_adi/DMA_REQ_TX
 ad_connect sys_ps7/DMA1_ACK          axi_i2s_adi/DMA_ACK_TX
 ad_connect sys_ps7/DMA2_REQ          axi_i2s_adi/DMA_REQ_RX
 ad_connect sys_ps7/DMA2_ACK          axi_i2s_adi/DMA_ACK_RX
+
+
+###############################################################################
+## Dummy nodes — EBAZ4205 does not have these peripherals, but the Yocto
+## device-tree fragments (adv7511.dtsi, adv7611.dtsi, zed_iic.dtsi,
+## zed_codec.dtsi, eece4534_pl.dtsi) reference their labels.
+## All are plain axi_gpio stubs so no ADI IP compilation is needed.
+## They will appear as status=disabled in the device tree.
+###############################################################################
+
+## axi_hdmi_clkgen — adv7511.dtsi
+ad_ip_instance axi_gpio axi_hdmi_clkgen
+ad_ip_parameter axi_hdmi_clkgen CONFIG.C_GPIO_WIDTH 1
+ad_cpu_interconnect 0x79000000 axi_hdmi_clkgen
+
+## axi_hdmi_dma — adv7511.dtsi
+ad_ip_instance axi_gpio axi_hdmi_dma
+ad_ip_parameter axi_hdmi_dma CONFIG.C_GPIO_WIDTH 1
+ad_cpu_interconnect 0x43000000 axi_hdmi_dma
+
+## axi_hdmi_core — adv7511.dtsi
+ad_ip_instance axi_gpio axi_hdmi_core
+ad_ip_parameter axi_hdmi_core CONFIG.C_GPIO_WIDTH 1
+ad_cpu_interconnect 0x70e00000 axi_hdmi_core
+
+## axi_iic_imageon — adv7611.dtsi, zed_iic.dtsi
+ad_ip_instance axi_iic axi_iic_imageon
+ad_cpu_interconnect 0x41620000 axi_iic_imageon
+
+## axi_iic_fmc — zed_iic.dtsi
+ad_ip_instance axi_iic axi_iic_fmc
+ad_cpu_interconnect 0x41680000 axi_iic_fmc
+
+## axi_hdmi_rx_dma — adv7611.dtsi
+ad_ip_instance axi_gpio axi_hdmi_rx_dma
+ad_ip_parameter axi_hdmi_rx_dma CONFIG.C_GPIO_WIDTH 1
+ad_cpu_interconnect 0x7c000000 axi_hdmi_rx_dma
+
+## axi_hdmi_rx_core — adv7611.dtsi
+ad_ip_instance axi_gpio axi_hdmi_rx_core
+ad_ip_parameter axi_hdmi_rx_core CONFIG.C_GPIO_WIDTH 1
+ad_cpu_interconnect 0x7c400000 axi_hdmi_rx_core
+
+## i2s_fifo — zed_codec.dtsi
+ad_ip_instance axi_gpio i2s_fifo
+ad_ip_parameter i2s_fifo CONFIG.C_GPIO_WIDTH 1
+ad_cpu_interconnect 0x411E0000 i2s_fifo
+
+## pmod_gpio — eece4534_pl.dtsi
+ad_ip_instance axi_gpio pmod_gpio
+ad_ip_parameter pmod_gpio CONFIG.C_INTERRUPT_PRESENT 1
+ad_ip_parameter pmod_gpio CONFIG.C_GPIO_WIDTH 16
+ad_cpu_interconnect 0x411F0000 pmod_gpio
+ad_connect sys_concat_intc/In9 pmod_gpio/ip2intc_irpt
