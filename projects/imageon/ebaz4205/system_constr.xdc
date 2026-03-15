@@ -118,11 +118,9 @@ set_property -dict {PACKAGE_PIN P18  IOSTANDARD LVCMOS33} [get_ports i2s_sdata_o
 ## I2C main (axi_iic_main, mirrors Zedboard 0x41600000)
 ## SCL = M17 (DATA3_8), SDA = L17 (DATA2_20)
 ## ============================================================================
-set_property -dict {PACKAGE_PIN M17  IOSTANDARD LVCMOS33} [get_ports iic_main_scl] ;## SCL DATA3_8
-set_property -dict {PACKAGE_PIN L17  IOSTANDARD LVCMOS33} [get_ports iic_main_sda] ;## SDA DATA2_20
+## IIC main — SCL = M17, SDA = L17
+## wrapper exposes _i/_o/_t separately; all share one physical IOBUF pin
+set_property -dict {PACKAGE_PIN M17  IOSTANDARD LVCMOS33} [get_ports iic_main_scl_io]
+set_property -dict {PACKAGE_PIN L17  IOSTANDARD LVCMOS33} [get_ports iic_main_sda_io]
 
-## ============================================================================
-## IOB constraints for LCD SPI
-## ============================================================================
-set_property IOB FALSE [get_cells {i_system_wrapper/system_i/lcd_spi/U0/NO_DUAL_QUAD_MODE.QSPI_NORMAL/IO0_I_REG}]
-set_property IOB FALSE [get_cells {i_system_wrapper/system_i/lcd_spi/U0/NO_DUAL_QUAD_MODE.QSPI_NORMAL/IO1_I_REG}]
+## IOB constraints removed — cell paths may differ in this build

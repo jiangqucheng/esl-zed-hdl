@@ -2,8 +2,8 @@
 ## imageon/ebaz4205/system_bd.tcl
 ##
 ## Peripheral map (mirrors imageon/zed/system_bd.tcl where possible):
-##   0x41200000  board_led_gpio  (2-bit: W13 green, W14 red — separate IP)
-##   0x41208000  ext_led_gpio    (8-bit: E19/K17/H18/G20/J18/G19/H20/J19)
+##   0x41208000  board_led_gpio  (2-bit: W13 green, W14 red — separate IP)
+##   0x41200000  led_gpio        (8-bit: E19/K17/H18/G20/J18/G19/H20/J19)
 ##   0x41210000  dipsw_gpio      (8-bit in, 8x SW on expansion board)
 ##   0x41220000  btn_gpio        (5-bit in, expansion buttons)
 ##   0x41230000  lcd_spi         (SPI to LCD ST7789)
@@ -34,7 +34,7 @@
 ## SW pin map (dipsw_gpio, 8 inputs):
 ##   sw[0..7] = K18/K19/J20/L16/L19/M18/L20/M20 (DATA2_11..19)
 ##
-## EXT LED pin map (ext_led_gpio, 8 outputs):
+## EXT LED pin map (led_gpio, 8 outputs):
 ##   ext_led[0..2] = E19/K17/H18 (DATA1_18/20/15, existing)
 ##   ext_led[3..7] = G20/J18/G19/H20/J19 (DATA2_5..9, new)
 ##
@@ -50,6 +50,18 @@ ad_ip_parameter axi_sysid_0 CONFIG.ROM_ADDR_BITS 9
 ad_ip_parameter rom_sys_0   CONFIG.PATH_TO_FILE "$mem_init_sys_file_path/mem_init_sys.txt"
 ad_ip_parameter rom_sys_0   CONFIG.ROM_ADDR_BITS 9
 sysid_gen_sys_init_file
+
+## GPIO EMIO: 물리 핀 없음 — BD 포트 제거 후 내부 constant로 처리
+## (Vivado가 64비트를 IO 핀으로 추출하는 것을 방지)
+delete_bd_objs [get_bd_ports gpio_i]
+delete_bd_objs [get_bd_ports gpio_o]
+delete_bd_objs [get_bd_ports gpio_t]
+ad_ip_instance xlconstant gpio_i_tie
+ad_ip_parameter gpio_i_tie CONFIG.CONST_VAL   {0}
+ad_ip_parameter gpio_i_tie CONFIG.CONST_WIDTH {64}
+disconnect_bd_net [get_bd_nets -of_objects [get_bd_pins sys_ps7/GPIO_I]] [get_bd_pins sys_ps7/GPIO_I]
+ad_connect gpio_i_tie/dout sys_ps7/GPIO_I
+
 
 ###############################################################################
 ## Disconnect interrupt slots
@@ -72,7 +84,7 @@ foreach intc_in {In0 In1 In3 In4 In5 In6 In7 In8 In13 In14} {
 ad_ip_instance axi_gpio board_led_gpio
 ad_ip_parameter board_led_gpio CONFIG.C_ALL_OUTPUTS 1
 ad_ip_parameter board_led_gpio CONFIG.C_GPIO_WIDTH  2
-ad_cpu_interconnect 0x41200000 board_led_gpio
+ad_cpu_interconnect 0x41208000 board_led_gpio
 
 create_bd_port -dir O -from 1 -to 0 board_led
 ad_connect board_led board_led_gpio/gpio_io_o
@@ -83,20 +95,20 @@ ad_connect board_led board_led_gpio/gpio_io_o
 ## [3..7] = G20/J18/G19/H20/J19 (DATA2_5..9, newly added)
 ###############################################################################
 
-ad_ip_instance axi_gpio ext_led_gpio
-ad_ip_parameter ext_led_gpio CONFIG.C_ALL_OUTPUTS   1
-ad_ip_parameter ext_led_gpio CONFIG.C_INTERRUPT_PRESENT 1
-ad_ip_parameter ext_led_gpio CONFIG.C_GPIO_WIDTH    8
-ad_ip_parameter ext_led_gpio CONFIG.C_IS_DUAL       1
-ad_ip_parameter ext_led_gpio CONFIG.C_ALL_OUTPUTS_2 1
-ad_ip_parameter ext_led_gpio CONFIG.C_GPIO2_WIDTH   5
-ad_cpu_interconnect 0x41208000 ext_led_gpio
-ad_connect sys_concat_intc/In6 ext_led_gpio/ip2intc_irpt
+ad_ip_instance axi_gpio led_gpio
+ad_ip_parameter led_gpio CONFIG.C_ALL_OUTPUTS   1
+ad_ip_parameter led_gpio CONFIG.C_INTERRUPT_PRESENT 1
+ad_ip_parameter led_gpio CONFIG.C_GPIO_WIDTH    8
+ad_ip_parameter led_gpio CONFIG.C_IS_DUAL       1
+ad_ip_parameter led_gpio CONFIG.C_ALL_OUTPUTS_2 1
+ad_ip_parameter led_gpio CONFIG.C_GPIO2_WIDTH   3
+ad_cpu_interconnect 0x41200000 led_gpio
+ad_connect sys_concat_intc/In6 led_gpio/ip2intc_irpt
 
 create_bd_port -dir O -from 7 -to 0 ext_led
 create_bd_port -dir O -from 4 -to 0 lcd_ctl
-ad_connect ext_led  ext_led_gpio/gpio_io_o
-ad_connect lcd_ctl  ext_led_gpio/gpio2_io_o
+## ext_led driven via ledconcat (mux routing), not directly from GPIO
+ad_connect lcd_ctl  led_gpio/gpio2_io_o
 
 ###############################################################################
 ## DIP Switch GPIO — 8-bit input, physical SW pins on expansion board
@@ -182,8 +194,8 @@ ad_ip_parameter mux0 CONFIG.C_DATA_W  1
 ad_ip_parameter mux0 CONFIG.C_INPUT_W 2
 ad_cpu_interconnect 0x41260000 mux0
 ad_connect tmr0/pwm0         mux0/input_1
-ad_connect tmr3/capturetrig0 mux0/dout
-ad_connect tmr3/capturetrig1 mux0/dout
+## tmr3 driven by tmr_capture2 (J3_SPEED) exclusively
+ad_connect tmr_capture2 tmr3/capturetrig1
 ad_connect tmr_capture2      tmr3/capturetrig0
 
 ad_ip_instance axi_mux mux1
@@ -238,9 +250,9 @@ ad_ip_parameter ledslice2 CONFIG.DIN_FROM   7
 ad_ip_parameter ledslice2 CONFIG.DIN_TO     2
 ad_ip_parameter ledslice2 CONFIG.DOUT_WIDTH 6
 
-ad_connect ext_led_gpio/gpio_io_o ledslice0/Din
-ad_connect ext_led_gpio/gpio_io_o ledslice1/Din
-ad_connect ext_led_gpio/gpio_io_o ledslice2/Din
+ad_connect led_gpio/gpio_io_o ledslice0/Din
+ad_connect led_gpio/gpio_io_o ledslice1/Din
+ad_connect led_gpio/gpio_io_o ledslice2/Din
 ad_connect ledslice0/Dout mux0/input_0
 ad_connect ledslice1/Dout mux1/input_0
 
@@ -262,18 +274,8 @@ ad_ip_parameter axi_iic_main CONFIG.IIC_BOARD_INTERFACE Custom
 ad_cpu_interconnect 0x41600000 axi_iic_main
 ad_connect sys_concat_intc/In14 axi_iic_main/iic2intc_irpt
 
-create_bd_port -dir I iic_main_scl_i
-create_bd_port -dir O iic_main_scl_o
-create_bd_port -dir O iic_main_scl_t
-create_bd_port -dir I iic_main_sda_i
-create_bd_port -dir O iic_main_sda_o
-create_bd_port -dir O iic_main_sda_t
-ad_connect axi_iic_main/scl_i iic_main_scl_i
-ad_connect axi_iic_main/scl_o iic_main_scl_o
-ad_connect axi_iic_main/scl_t iic_main_scl_t
-ad_connect axi_iic_main/sda_i iic_main_sda_i
-ad_connect axi_iic_main/sda_o iic_main_sda_o
-ad_connect axi_iic_main/sda_t iic_main_sda_t
+create_bd_intf_port -mode Master -vlnv xilinx.com:interface:iic_rtl:1.0 iic_main
+ad_connect axi_iic_main/IIC iic_main
 
 ###############################################################################
 ## Spare I2C (axi_iic_ext) — physical pins on expansion header (no XDC yet)
@@ -283,18 +285,15 @@ ad_ip_instance axi_iic axi_iic_ext
 ad_cpu_interconnect 0x41640000 axi_iic_ext
 ad_connect sys_concat_intc/In13 axi_iic_ext/iic2intc_irpt
 
-create_bd_port -dir I iic_ext_scl_i
-create_bd_port -dir O iic_ext_scl_o
-create_bd_port -dir O iic_ext_scl_t
-create_bd_port -dir I iic_ext_sda_i
-create_bd_port -dir O iic_ext_sda_o
-create_bd_port -dir O iic_ext_sda_t
-ad_connect axi_iic_ext/scl_i iic_ext_scl_i
-ad_connect axi_iic_ext/scl_o iic_ext_scl_o
-ad_connect axi_iic_ext/scl_t iic_ext_scl_t
-ad_connect axi_iic_ext/sda_i iic_ext_sda_i
-ad_connect axi_iic_ext/sda_o iic_ext_sda_o
-ad_connect axi_iic_ext/sda_t iic_ext_sda_t
+## iic_ext: 물리 핀 미확정 — IIC 인터페이스를 GND/VCC로 tie
+ad_ip_instance xlconstant iic_ext_scl_tie
+ad_ip_parameter iic_ext_scl_tie CONFIG.CONST_VAL   1
+ad_ip_parameter iic_ext_scl_tie CONFIG.CONST_WIDTH 1
+ad_ip_instance xlconstant iic_ext_sda_tie
+ad_ip_parameter iic_ext_sda_tie CONFIG.CONST_VAL   1
+ad_ip_parameter iic_ext_sda_tie CONFIG.CONST_WIDTH 1
+ad_connect iic_ext_scl_tie/dout axi_iic_ext/scl_i
+ad_connect iic_ext_sda_tie/dout axi_iic_ext/sda_i
 
 ###############################################################################
 ## XADC
@@ -326,42 +325,56 @@ ad_connect xadc0/ip2intc_irpt sys_concat_intc/In8
 ##   i2s_sdata_in  = no physical pin (DAC only, tie to GND internally)
 ###############################################################################
 
+## Enable PS7 DMA0/1/2 for audio (overrides ebaz4205_system_bd.tcl defaults)
+ad_ip_parameter sys_ps7 CONFIG.PCW_USE_DMA0 1
+ad_ip_parameter sys_ps7 CONFIG.PCW_USE_DMA1 1
+ad_ip_parameter sys_ps7 CONFIG.PCW_USE_DMA2 1
+
 ad_ip_instance clk_wiz sys_audio_clkgen
-ad_ip_parameter sys_audio_clkgen CONFIG.PRIMITIVE            MMCM
-ad_ip_parameter sys_audio_clkgen CONFIG.CLKOUT1_USED        true
 ad_ip_parameter sys_audio_clkgen CONFIG.CLKOUT1_REQUESTED_OUT_FREQ 12.288
-ad_ip_parameter sys_audio_clkgen CONFIG.USE_LOCKED          false
-ad_ip_parameter sys_audio_clkgen CONFIG.USE_RESET           false
-ad_connect sys_ps7/FCLK_CLK0 sys_audio_clkgen/clk_in1
+ad_ip_parameter sys_audio_clkgen CONFIG.USE_LOCKED false
+ad_ip_parameter sys_audio_clkgen CONFIG.USE_RESET true
+ad_ip_parameter sys_audio_clkgen CONFIG.USE_PHASE_ALIGNMENT false
+ad_ip_parameter sys_audio_clkgen CONFIG.RESET_TYPE ACTIVE_LOW
+ad_ip_parameter sys_audio_clkgen CONFIG.PRIM_SOURCE No_buffer
+ad_connect sys_cpu_clk    sys_audio_clkgen/clk_in1
+ad_connect sys_cpu_resetn sys_audio_clkgen/resetn
 
 ad_ip_instance axi_spdif_tx axi_spdif_tx_core
 ad_ip_parameter axi_spdif_tx_core CONFIG.DMA_TYPE           1
 ad_ip_parameter axi_spdif_tx_core CONFIG.S_AXI_ADDRESS_WIDTH 16
 ad_cpu_interconnect 0x75c00000 axi_spdif_tx_core
 ad_connect sys_cpu_clk               axi_spdif_tx_core/DMA_REQ_ACLK
+ad_connect sys_cpu_clk               sys_ps7/DMA0_ACLK
 ad_connect sys_cpu_resetn            axi_spdif_tx_core/DMA_REQ_RSTN
 ad_connect sys_audio_clkgen/clk_out1 axi_spdif_tx_core/spdif_data_clk
 ad_connect sys_ps7/DMA0_REQ          axi_spdif_tx_core/DMA_REQ
 ad_connect sys_ps7/DMA0_ACK          axi_spdif_tx_core/DMA_ACK
-
-create_bd_port -dir O spdif
-ad_connect spdif axi_spdif_tx_core/spdif_tx_o
 
 ad_ip_instance axi_i2s_adi axi_i2s_adi
 ad_ip_parameter axi_i2s_adi CONFIG.DMA_TYPE           1
 ad_ip_parameter axi_i2s_adi CONFIG.S_AXI_ADDRESS_WIDTH 16
 ad_cpu_interconnect 0x77600000 axi_i2s_adi
 ad_connect sys_cpu_clk               axi_i2s_adi/DMA_REQ_RX_ACLK
+ad_connect sys_cpu_clk               sys_ps7/DMA1_ACLK
+ad_connect sys_cpu_clk               sys_ps7/DMA2_ACLK
 ad_connect sys_cpu_clk               axi_i2s_adi/DMA_REQ_TX_ACLK
 ad_connect sys_cpu_resetn            axi_i2s_adi/DMA_REQ_TX_RSTN
 ad_connect sys_cpu_resetn            axi_i2s_adi/DMA_REQ_RX_RSTN
+## I2S 개별 포트 — sdata_in 은 constant 0 으로 tie (PCM5102A는 DAC only)
+create_bd_port -dir O i2s_bclk
+create_bd_port -dir O i2s_lrclk
+create_bd_port -dir O i2s_sdata_out
+ad_ip_instance xlconstant i2s_sdata_gnd
+ad_ip_parameter i2s_sdata_gnd CONFIG.CONST_VAL {0}
+ad_ip_parameter i2s_sdata_gnd CONFIG.CONST_WIDTH {1}
+
 ad_connect sys_audio_clkgen/clk_out1 axi_i2s_adi/DATA_CLK_I
-ad_connect sys_audio_clkgen/clk_out1 i2s_mclk
+ad_connect axi_i2s_adi/bclk_o    i2s_bclk
+ad_connect axi_i2s_adi/lrclk_o   i2s_lrclk
+ad_connect axi_i2s_adi/sdata_o   i2s_sdata_out
+ad_connect i2s_sdata_gnd/dout    axi_i2s_adi/sdata_i
 ad_connect sys_ps7/DMA1_REQ          axi_i2s_adi/DMA_REQ_TX
 ad_connect sys_ps7/DMA1_ACK          axi_i2s_adi/DMA_ACK_TX
 ad_connect sys_ps7/DMA2_REQ          axi_i2s_adi/DMA_REQ_RX
 ad_connect sys_ps7/DMA2_ACK          axi_i2s_adi/DMA_ACK_RX
-
-create_bd_port -dir O -type clk i2s_mclk
-create_bd_intf_port -mode Master -vlnv analog.com:interface:i2s_rtl:1.0 i2s
-ad_connect i2s axi_i2s_adi/I2S
