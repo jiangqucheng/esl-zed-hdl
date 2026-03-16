@@ -53,3 +53,39 @@ clean-all:clean clean-ipcache
 
 ####################################################################################
 ####################################################################################
+
+
+####################################################################################
+## ESL machine targets -- build XSA and symlink into build/
+## Usage: make zedboard-esl  OR  make ebaz4205-esl
+####################################################################################
+
+BUILD_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))build
+
+.PHONY: zedboard-esl ebaz4205-esl
+
+zedboard-esl:
+	$(MAKE) -C projects/imageon/zed ADI_IGNORE_VERSION_CHECK=1
+	@mkdir -p $(BUILD_DIR)
+	@XSA=projects/imageon/zed/ADIIGNOREVERSIONCHECK1/imageon_zed.sdk/system_top.xsa; \
+	 TARGET=$(BUILD_DIR)/system_top-zedboard-esl.xsa; \
+	 if [ ! -e "$$XSA" ]; then \
+	   echo "FATAL: XSA not found: $$XSA"; \
+	   exit 1; \
+	 fi; \
+	 rm -f "$$TARGET"; \
+	 ln -s "`pwd`/$$XSA" "$$TARGET"; \
+	 echo "Linked: $$TARGET"
+
+ebaz4205-esl:
+	$(MAKE) -C projects/imageon/ebaz4205 ADI_IGNORE_VERSION_CHECK=1
+	@mkdir -p $(BUILD_DIR)
+	@XSA=projects/imageon/ebaz4205/ADIIGNOREVERSIONCHECK1/imageon_ebaz4205.sdk/system_top.xsa; \
+	 TARGET=$(BUILD_DIR)/system_top-ebaz4205-esl.xsa; \
+	 if [ ! -e "$$XSA" ]; then \
+	   echo "FATAL: XSA not found: $$XSA"; \
+	   exit 1; \
+	 fi; \
+	 rm -f "$$TARGET"; \
+	 ln -s "`pwd`/$$XSA" "$$TARGET"; \
+	 echo "Linked: $$TARGET"
