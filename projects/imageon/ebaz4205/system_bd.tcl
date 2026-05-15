@@ -22,21 +22,18 @@
 ##   0x77600000  axi_i2s_adi
 ##
 ## I2S pin map (PCM5102A, 3-wire mode — no SCK needed):
-##   BCK   = M19 (DATA3_5)
-##   LRCK  = N20 (DATA3_6)
-##   DIN   = P18 (DATA3_7)  [FPGA SDATA_OUT → DAC DIN]
-##   MCLK  = L17 (DATA2_20) [optional, chip has internal PLL]
+##   BCK   = M19 
+##   LRCK  = N20 
+##   DIN   = P18   [FPGA SDATA_OUT → DAC DIN]
+##   MCLK  = L17  [optional, chip has internal PLL]
 ##
 ## I2C pin map (axi_iic_main):
-##   SCL = M17 (DATA3_8)
-##   SDA = (DATA3 last spare, see note below)
+##   SCL = M17 
+##   SDA
 ##
-## SW pin map (dipsw_gpio, 8 inputs):
-##   sw[0..7] = K18/K19/J20/L16/L19/M18/L20/M20 (DATA2_11..19)
+## SW pin map (dipsw_gpio, 8 inputs).
 ##
-## EXT LED pin map (led_gpio, 8 outputs):
-##   ext_led[0..2] = E19/K17/H18 (DATA1_18/20/15, existing)
-##   ext_led[3..7] = G20/J18/G19/H20/J19 (DATA2_5..9, new)
+## EXT LED pin map (led_gpio, 8 outputs).
 ##
 ## Note: I2C uses PS7 I2C0 (MIO 26/27) = /dev/i2c-0 instead of axi_iic_main
 ##   to save 2 pins. axi_iic_ext reuses old axi_iic_main address for compat.
@@ -96,8 +93,6 @@ ad_connect board_led_inv/Res        board_led
 
 ###############################################################################
 ## Extension LED GPIO — 8-bit output
-## [0..2] = E19/K17/H18 (existing ext LEDs on expansion board)
-## [3..7] = G20/J18/G19/H20/J19 (DATA2_5..9, newly added)
 ###############################################################################
 
 ad_ip_instance axi_gpio led_gpio
@@ -269,7 +264,7 @@ ad_connect ledslice2/Dout ledconcat/In2
 ad_connect ledconcat/dout ext_led
 
 ###############################################################################
-## I2C main (axi_iic_main) — physical pins: SCL=M17(DATA3_8), SDA=L17(DATA2_20)
+## I2C main (axi_iic_main)
 ## Mirrors Zedboard axi_iic_main at 0x41600000
 ###############################################################################
 
@@ -323,10 +318,10 @@ ad_connect xadc0/ip2intc_irpt sys_concat_intc/In8
 ## Audio: clock generator + SPDIF TX + I2S ADI
 ## DMA0 → SPDIF, DMA1 → I2S TX, DMA2 → I2S RX
 ## I2S pin map (3-wire, PCM5102A compatible):
-##   i2s_mclk  = L17 (DATA2_20) — optional, PCM5102A has internal PLL
-##   i2s_bclk  = M19 (DATA3_5)
-##   i2s_lrclk = N20 (DATA3_6)
-##   i2s_sdata_out = P18 (DATA3_7) → PCM5102A DIN
+##   i2s_mclk  = L17 — optional, PCM5102A has internal PLL
+##   i2s_bclk  = M19 
+##   i2s_lrclk = N20 
+##   i2s_sdata_out = P18 → PCM5102A DIN
 ##   i2s_sdata_in  = no physical pin (DAC only, tie to GND internally)
 ###############################################################################
 
