@@ -82,11 +82,20 @@ set_property -dict {PACKAGE_PIN C20  IOSTANDARD LVCMOS33} [get_ports {board_btn[
 ## ============================================================================
 ## LCD ST7789 SPI + control
 ## ============================================================================
-set_property -dict {PACKAGE_PIN H18  IOSTANDARD LVCMOS33} [get_ports lcd_scl]       ;## LCD_SCL
-set_property -dict {PACKAGE_PIN D18  IOSTANDARD LVCMOS33} [get_ports lcd_sda]       ;## LCD_SDA
-set_property -dict {PACKAGE_PIN D19  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[0]}]  ;## LCD_DC
-set_property -dict {PACKAGE_PIN D20  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[1]}]  ;## LCD_RST
-set_property -dict {PACKAGE_PIN H17  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[2]}]  ;## LCD_BL
+# set_property -dict {PACKAGE_PIN H18  IOSTANDARD LVCMOS33} [get_ports lcd_scl]       ;## LCD_SCL
+# set_property -dict {PACKAGE_PIN D18  IOSTANDARD LVCMOS33} [get_ports lcd_sda]       ;## LCD_SDA
+# set_property -dict {PACKAGE_PIN D19  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[0]}]  ;## LCD_DC
+# set_property -dict {PACKAGE_PIN D20  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[1]}]  ;## LCD_RST
+# set_property -dict {PACKAGE_PIN H17  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[2]}]  ;## LCD_BL
+## ============================================================================
+## LCD ST7789 SPI + control  (OLD design from external expansion board)
+## ============================================================================
+set_property -dict {PACKAGE_PIN R19  IOSTANDARD LVCMOS33} [get_ports lcd_scl]       ;## LCD_SCL
+set_property -dict {PACKAGE_PIN P20  IOSTANDARD LVCMOS33} [get_ports lcd_sda]       ;## LCD_SDA
+set_property -dict {PACKAGE_PIN R18  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[0]}]  ;## LCD_DC
+set_property -dict {PACKAGE_PIN N17  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[1]}]  ;## LCD_RST
+set_property -dict {PACKAGE_PIN T20  IOSTANDARD LVCMOS33} [get_ports {lcd_ctl[2]}]  ;## LCD_BL
+
 
 ## ============================================================================
 ## CH340 UART
@@ -111,7 +120,8 @@ set_property -dict {PACKAGE_PIN V13  IOSTANDARD LVCMOS33} [get_ports tmr_capture
 ## MCLK omitted — PCM5102A generates internally from BCK PLL
 ## ============================================================================
 set_property -dict {PACKAGE_PIN M17  IOSTANDARD LVCMOS33} [get_ports i2s_bclk]      ;## BCK   DATA3_5
-set_property -dict {PACKAGE_PIN N17  IOSTANDARD LVCMOS33} [get_ports i2s_lrclk]     ;## LRCK  DATA3_6
+# set_property -dict {PACKAGE_PIN N17  IOSTANDARD LVCMOS33} [get_ports i2s_lrclk]     ;## LRCK  DATA3_6
+set_property -dict {PACKAGE_PIN D20  IOSTANDARD LVCMOS33} [get_ports i2s_lrclk]     ;## LRCK  DATA3_6
 set_property -dict {PACKAGE_PIN P18  IOSTANDARD LVCMOS33} [get_ports i2s_sdata_out] ;## DIN   DATA3_7
 
 ## ============================================================================
@@ -120,7 +130,9 @@ set_property -dict {PACKAGE_PIN P18  IOSTANDARD LVCMOS33} [get_ports i2s_sdata_o
 ## ============================================================================
 ## IIC main — SCL = M17, SDA = L17
 ## wrapper exposes _i/_o/_t separately; all share one physical IOBUF pin
-set_property -dict {PACKAGE_PIN R18  IOSTANDARD LVCMOS33} [get_ports iic_main_scl_io]
-set_property -dict {PACKAGE_PIN R19  IOSTANDARD LVCMOS33} [get_ports iic_main_sda_io]
+# set_property -dict {PACKAGE_PIN R18  IOSTANDARD LVCMOS33} [get_ports iic_main_scl_io]
+# set_property -dict {PACKAGE_PIN R19  IOSTANDARD LVCMOS33} [get_ports iic_main_sda_io]
+set_property -dict {PACKAGE_PIN D19  IOSTANDARD LVCMOS33} [get_ports iic_main_scl_io]
+set_property -dict {PACKAGE_PIN H18  IOSTANDARD LVCMOS33} [get_ports iic_main_sda_io]
 
 ## IOB constraints removed — cell paths may differ in this build
