@@ -106,7 +106,7 @@ ad_cpu_interconnect 0x41200000 led_gpio
 ad_connect sys_concat_intc/In6 led_gpio/ip2intc_irpt
 
 create_bd_port -dir O -from 7 -to 0 ext_led
-create_bd_port -dir O -from 4 -to 0 lcd_ctl
+create_bd_port -dir O -from 2 -to 0 lcd_ctl
 ## ext_led driven via ledconcat (mux routing), not directly from GPIO
 ad_connect lcd_ctl  led_gpio/gpio2_io_o
 
@@ -154,7 +154,7 @@ create_bd_port -dir O lcd_scl
 ad_connect lcd_spi/io0_o      lcd_sda
 ad_connect lcd_spi/sck_o      lcd_scl
 ad_connect GND                lcd_spi/io1_i
-ad_connect sys_ps7/FCLK_CLK0 lcd_spi/ext_spi_clk
+ad_connect sys_ps7/FCLK_CLK0  lcd_spi/ext_spi_clk
 
 ###############################################################################
 ## Timers

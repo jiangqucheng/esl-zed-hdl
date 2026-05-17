@@ -53,6 +53,9 @@ module system_top (
   // Push Buttons: 5x expansion
   input   [ 4:0]  board_btn,
 
+  // LCD ST7789 bitbang SPI via GPIO
+  // output  [ 5:0]  lcd_ctl,  // [0]=DC, [1]=RST, [2]=BL, [3]=CS, [4]=SCL, [5]=SDA
+
   // LCD ST7789 SPI + control
   output          lcd_scl,
   output          lcd_sda,
@@ -86,7 +89,9 @@ module system_top (
   // Internal wires
   // -------------------------------------------------------------------------
 
-  // lcd_ctl: BD drives [4:0], only [2:0] have physical pins; [4:3] float
+  // // lcd_ctl[5:0]: [0]=DC [1]=RST [2]=BL [3]=CS [4]=SCL [5]=SDA
+  // wire  [ 5:0]  lcd_ctl_bd;
+  // lcd_ctl: BD drives [5:0], only [2:0] have physical pins; [5:3] float
   wire  [ 2:0]  lcd_ctl_bd;
   assign lcd_ctl = lcd_ctl_bd;
 
